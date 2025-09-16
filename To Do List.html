@@ -282,7 +282,7 @@
     <div class="footer">
       <span id="taskCounter">0 tasks</span>
       <div class="footer-buttons">
-        <button id="undoBtn" class="undo-btn" title="Undo Delete">Undo</button>
+        <button id="undoBtn" class="undo-btn" title="Undo Action">Undo</button>
         <button id="exportBtn" class="export-btn" title="Export to JSON">Export</button>
         <button id="importBtn" class="import-btn" title="Import from JSON">Import</button>
         <button id="clearAllBtn" class="clear-btn" title="Clear All Tasks">Clear All</button>
@@ -291,8 +291,7 @@
 
     <div class="stats" id="statsPanel"></div>
   </div>
-
- <script>
+  <script>
     document.addEventListener("DOMContentLoaded", () => {
       const taskForm = document.getElementById("taskForm");
       const taskInput = document.getElementById("taskInput");
@@ -310,7 +309,7 @@
       const notification = document.getElementById("notification");
 
       let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
-      let lastDeletedTask = null;
+      let undoStack = [];
       let currentSort = { key: null, asc: true };
       let activeEditor = null;
 
@@ -358,11 +357,11 @@
               return currentSort.asc ? da - db : db - da;
             });
           } else if (currentSort.key === "timeLeft") {
+            const now = new Date();
             filteredTasks.sort((a, b) => {
-              const now = new Date();
-              const da = a.due ? new Date(a.due) - now : Infinity;
-              const db = b.due ? new Date(b.due) - now : Infinity;
-              return currentSort.asc ? da - db : db - da;
+              const ta = a.completed && a.frozenTime != null ? a.frozenTime : a.due ? new Date(a.due) - now : Infinity;
+              const tb = b.completed && b.frozenTime != null ? b.frozenTime : b.due ? new Date(b.due) - now : Infinity;
+              return currentSort.asc ? ta - tb : tb - ta;
             });
           } else if (currentSort.key === "task") {
             filteredTasks.sort((a, b) =>
@@ -373,7 +372,6 @@
 
         taskList.innerHTML = "";
         const now = new Date();
-
         filteredTasks.forEach(task => {
           const row = document.createElement("tr");
           row.dataset.id = task.id;
@@ -385,9 +383,7 @@
 
           if (dueDate) {
             if (task.completed && task.frozenTime != null) {
-              timeLeftText =
-                formatTimeLeft(task.frozenTime) +
-                (task.frozenTime < 0 ? " overdue" : "");
+              timeLeftText = formatTimeLeft(task.frozenTime) + (task.frozenTime < 0 ? " overdue" : "");
             } else {
               const diff = dueDate - now;
               if (diff < 0) {
@@ -446,26 +442,22 @@
         let due = null;
         if (dueDateInput.value) {
           due = dueDateInput.value;
-          if (dueTimeInput.value) {
-            due += "T" + dueTimeInput.value;
-          } else {
-            due += "T00:00";
-          }
+          if (dueTimeInput.value) due += "T" + dueTimeInput.value;
+          else due += "T00:00";
         }
 
-        if (!due) {
-          const confirmAdd = confirm("No deadline set. Do you want to add this task without a deadline?");
-          if (!confirmAdd) return;
-        }
+        if (!due && !confirm("No deadline set. Do you want to add this task without a deadline?")) return;
 
         const newTask = {
           id: Date.now(),
           text,
           completed: false,
           priority: prioritySelect.value,
-          due: due,
+          due,
           frozenTime: null
         };
+
+        undoStack.push({ type: 'add', task: JSON.parse(JSON.stringify(newTask)) });
         tasks.push(newTask);
         taskForm.reset();
         prioritySelect.value = "medium";
@@ -482,7 +474,7 @@
 
         if (target.classList.contains("delete-btn")) {
           if (confirm(`Are you sure you want to delete task "${task.text}"?`)) {
-            lastDeletedTask = JSON.parse(JSON.stringify(task));
+            undoStack.push({ type: 'delete', task: JSON.parse(JSON.stringify(task)) });
             tasks = tasks.filter(t => t.id !== taskId);
             saveState();
           }
@@ -490,15 +482,11 @@
         }
 
         if (target.classList.contains("task-checkbox")) {
+          const previousState = JSON.parse(JSON.stringify(task));
           task.completed = target.checked;
-          if (task.completed) {
-            if (task.due) {
-              const diff = new Date(task.due) - new Date();
-              task.frozenTime = diff; // freeze exact time (pos or neg)
-            }
-          } else {
-            task.frozenTime = null;
-          }
+          if (task.completed && task.due) task.frozenTime = new Date(task.due) - new Date();
+          else task.frozenTime = null;
+          undoStack.push({ type: 'toggle', task: previousState });
           saveState();
           return;
         }
@@ -511,6 +499,7 @@
 
       function startInlineEdit(tr, task) {
         if (activeEditor) return;
+        
         const cell = tr.querySelector(".task-text");
         if (!cell) return;
 
@@ -518,56 +507,109 @@
         const input = document.createElement("input");
         input.type = "text";
         input.value = originalText;
-        input.className = "inline-editor";
-        input.style.textAlign = "center";
-        input.style.border = "none";
-        input.style.width = "100%";
-        input.style.background = "transparent";
-        input.style.outline = "none";
-        input.style.font = "inherit";
-        input.style.color = "inherit";
-        input.style.padding = "0";
+
+        Object.assign(input.style, {
+          background: "white",
+          border: "2px solid #007bff",
+          width: "100%",
+          font: "inherit",
+          textAlign: "inherit",
+          padding: "4px 8px",
+          margin: "0",
+          outline: "none",
+          boxSizing: "border-box",
+          borderRadius: "4px"
+        });
+
+        const originalContent = cell.innerHTML;
         cell.innerHTML = "";
         cell.appendChild(input);
         input.focus();
-        activeEditor = input;
+        input.select();
+        activeEditor = { input, cell, originalContent, task, originalText };
 
-        const commit = () => {
+        notification.textContent = "Editing: Press Enter to save or Esc to cancel";
+        notification.style.display = "block";
+
+        let finished = false;
+
+        const cleanup = () => {
+          if (finished) return;
+          finished = true;
+          activeEditor = null;
+          notification.style.display = "none";
+          document.removeEventListener("click", outsideClickListener);
+          document.removeEventListener("keydown", escapeHandler);
+        };
+
+        const saveEdit = () => {
+          if (finished) return;
           const newText = input.value.trim();
           if (newText && newText !== originalText) {
-            const t = tasks.find(tt => tt.id === task.id);
-            if (t) t.text = newText;
+            const previousState = JSON.parse(JSON.stringify(task));
+            task.text = newText;
+            undoStack.push({ type: 'edit', task: previousState });
+            saveState();
+          } else {
+            cell.innerHTML = originalContent;
           }
-          cell.innerHTML = escapeHtml((tasks.find(tt => tt.id === task.id) || {}).text || originalText);
-          activeEditor = null;
-          saveState();
+          cleanup();
         };
 
-        const rollback = () => {
-          cell.innerHTML = escapeHtml(originalText);
-          activeEditor = null;
+        const cancelEdit = () => {
+          if (finished) return;
+          cell.innerHTML = originalContent;
+          cleanup();
         };
 
-        input.addEventListener("blur", commit);
+        const escapeHandler = (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            cancelEdit();
+          }
+        };
+
+        const outsideClickListener = (ev) => {
+          if (!cell.contains(ev.target)) {
+            saveEdit(); 
+          }
+        };
+
         input.addEventListener("keydown", (ev) => {
           if (ev.key === "Enter") {
             ev.preventDefault();
-            input.blur();
-          } else if (ev.key === "Escape") {
-            ev.preventDefault();
-            rollback();
+            saveEdit();
           }
         });
+
+        document.addEventListener("click", outsideClickListener);
+        document.addEventListener("keydown", escapeHandler);
       }
 
-      const undoDelete = () => {
-        if (lastDeletedTask) {
-          const exists = tasks.some(t => t.id === lastDeletedTask.id);
-          if (exists) {
-            lastDeletedTask.id = Date.now();
+      const undoLastAction = () => {
+        if (undoStack.length > 0) {
+          const lastAction = undoStack.pop();
+          if (lastAction.type === 'clearAll') {
+            tasks = lastAction.tasks;
+            saveState();
+            return;
           }
-          tasks.push(lastDeletedTask);
-          lastDeletedTask = null;
+          if (lastAction.type === 'delete') {
+            const exists = tasks.some(t => t.id === lastAction.task.id);
+            if (exists) lastAction.task.id = Date.now();
+            tasks.push(lastAction.task);
+          } else if (lastAction.type === 'add') {
+            tasks = tasks.filter(t => t.id !== lastAction.task.id);
+          } else if (lastAction.type === 'edit') {
+            const t = tasks.find(tt => tt.id === lastAction.task.id);
+            if (t) t.text = lastAction.task.text;
+          } else if (lastAction.type === 'toggle') {
+            const t = tasks.find(tt => tt.id === lastAction.task.id);
+            if (t) {
+              t.completed = lastAction.task.completed;
+              t.frozenTime = lastAction.task.frozenTime;
+            }
+          }
           saveState();
         } else {
           notification.textContent = "Nothing to undo.";
@@ -578,16 +620,14 @@
 
       const clearAll = () => {
         if (confirm("Are you sure you want to delete all tasks?")) {
+          undoStack.push({ type: 'clearAll', tasks: JSON.parse(JSON.stringify(tasks)) });
           tasks = [];
           saveState();
         }
       };
 
       const exportTasks = () => {
-        if (tasks.length === 0) {
-          alert("No tasks to export.");
-          return;
-        }
+        if (tasks.length === 0) { alert("No tasks to export."); return; }
         const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -609,18 +649,12 @@
             try {
               const importedTasks = JSON.parse(event.target.result);
               if (Array.isArray(importedTasks)) {
+                undoStack.push({ type: 'clearAll', tasks: JSON.parse(JSON.stringify(tasks)) });
                 const clean = importedTasks.filter(t => t && t.text);
-                tasks = clean.map(t => {
-                  if (!t.id) t.id = Date.now() + Math.floor(Math.random() * 1000);
-                  return t;
-                });
+                tasks = clean.map(t => { if (!t.id) t.id = Date.now() + Math.floor(Math.random() * 1000); return t; });
                 saveState();
-              } else {
-                alert("Invalid file format");
-              }
-            } catch {
-              alert("Error parsing file");
-            }
+              } else alert("Invalid file format");
+            } catch { alert("Error parsing file"); }
           };
           reader.readAsText(file);
         };
@@ -638,29 +672,28 @@
       };
 
       taskForm.addEventListener("submit", addTask);
-      taskForm.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          taskForm.requestSubmit();
-        }
-      });
-
+      taskForm.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); taskForm.requestSubmit(); } });
       taskList.addEventListener("click", handleTaskListClick);
-
       searchInput.addEventListener("input", renderTasks);
-      undoBtn.addEventListener("click", (e) => { e.preventDefault(); undoDelete(); });
+      undoBtn.addEventListener("click", (e) => { e.preventDefault(); undoLastAction(); });
       clearAllBtn.addEventListener("click", (e) => { e.preventDefault(); clearAll(); });
       exportBtn.addEventListener("click", (e) => { e.preventDefault(); exportTasks(); });
       importBtn.addEventListener("click", (e) => { e.preventDefault(); importTasks(); });
+      document.querySelectorAll("#taskTable th[data-sort]").forEach(th => th.addEventListener("click", handleSort));
 
-      document.querySelectorAll("#taskTable th").forEach(th => th.addEventListener("click", handleSort));
+      setInterval(() => { if (!activeEditor) updateCountdown(); }, 1000);
 
-      setInterval(() => {
-        if (!activeEditor) renderTasks();
-      }, 1000);
+      const updateCountdown = () => {
+        const now = new Date();
+        tasks.forEach(task => {
+          if (!task.due || task.completed) return;
+          task.remaining = new Date(task.due) - now;
+        });
+        renderTasks();
+      };
 
       renderTasks();
     });
-  </script>
+    </script>
 </body>
 </html>
