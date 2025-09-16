@@ -226,6 +226,57 @@
       border: 1px solid #2196f3;
       color: var(--navy);
     }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 31, 63, 0.6);
+      justify-content: center;
+      align-items: center;
+      transition: opacity var(--transition-speed);
+    }
+    .modal.active { display: flex; }
+
+    .modal-content {
+      background: white;
+      color: var(--navy);
+      border-radius: 12px;
+      padding: 20px 25px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 6px 20px var(--shadow-color);
+      text-align: center;
+      animation: popIn 0.3s ease;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: var(--navy);
+    }
+    .modal-body { margin: 10px 0 20px; font-size: 15px; color: var(--text-color); }
+    .modal-footer { display: flex; justify-content: center; gap: 12px; }
+
+    .modal-btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      min-width: 80px;
+    }
+    .modal-btn.confirm { background: var(--navy); color: white; }
+    .modal-btn.cancel { background: var(--silver); color: var(--navy); }
   </style>
 </head>
 <body>
@@ -291,6 +342,16 @@
 
     <div class="stats" id="statsPanel"></div>
   </div>
+  <div id="appModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header" id="modalTitle">Confirm</div>
+      <div class="modal-body" id="modalMessage">Are you sure?</div>
+      <div class="modal-footer">
+        <button class="modal-btn confirm" id="modalConfirmBtn">OK</button>
+        <button class="modal-btn cancel" id="modalCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const taskForm = document.getElementById("taskForm");
@@ -315,6 +376,42 @@
 
       const todayISO = new Date().toISOString().split("T")[0];
       dueDateInput.setAttribute("min", todayISO);
+
+      function showModal(title, message, onConfirm, showCancel = true) {
+        const modal = document.getElementById("appModal");
+        const modalTitle = document.getElementById("modalTitle");
+        const modalMessage = document.getElementById("modalMessage");
+        const confirmBtn = document.getElementById("modalConfirmBtn");
+        const cancelBtn = document.getElementById("modalCancelBtn");
+
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modal.classList.add("active");
+
+        cancelBtn.style.display = showCancel ? "inline-block" : "none";
+
+        const closeModal = () => modal.classList.remove("active");
+
+        confirmBtn.onclick = () => { closeModal(); if (onConfirm) onConfirm(); };
+        cancelBtn.onclick = closeModal;
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+      }
+
+      function showInfoModal(title, message, onOk = null) {
+        const modal = document.getElementById("infoModal");
+        const modalTitle = document.getElementById("infoModalTitle");
+        const modalMessage = document.getElementById("infoModalMessage");
+        const okBtn = document.getElementById("infoModalOkBtn");
+
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modal.classList.add("active");
+
+        const closeModal = () => modal.classList.remove("active");
+
+        okBtn.onclick = () => { closeModal(); if (onOk) onOk(); };
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+      }
 
       const saveState = () => {
         localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -446,8 +543,18 @@
           else due += "T00:00";
         }
 
-        if (!due && !confirm("No deadline set. Do you want to add this task without a deadline?")) return;
+        if (!due) {
+          showModal("No Deadline", "No deadline set. Do you want to add this task without a deadline?", () => {
+            proceedAddTask(text, due);
+            showInfoModal("Task Added", "Your task has been added successfully!");
+          });
+          return;
+        }
+        proceedAddTask(text, due);
+        showInfoModal("Task Added", "Your task has been added successfully!");
+      };
 
+      function proceedAddTask(text, due) {
         const newTask = {
           id: Date.now(),
           text,
@@ -456,13 +563,12 @@
           due,
           frozenTime: null
         };
-
         undoStack.push({ type: 'add', task: JSON.parse(JSON.stringify(newTask)) });
         tasks.push(newTask);
         taskForm.reset();
         prioritySelect.value = "medium";
         saveState();
-      };
+      }
 
       const handleTaskListClick = (e) => {
         const target = e.target;
@@ -473,11 +579,12 @@
         if (!task) return;
 
         if (target.classList.contains("delete-btn")) {
-          if (confirm(`Are you sure you want to delete task "${task.text}"?`)) {
+          showModal("Delete Task", `Are you sure you want to delete "${task.text}"?`, () => {
             undoStack.push({ type: 'delete', task: JSON.parse(JSON.stringify(task)) });
             tasks = tasks.filter(t => t.id !== taskId);
             saveState();
-          }
+            showInfoModal("Task Deleted", "The task was successfully deleted.");
+          });
           return;
         }
 
@@ -488,6 +595,11 @@
           else task.frozenTime = null;
           undoStack.push({ type: 'toggle', task: previousState });
           saveState();
+          if (task.completed) {
+            showInfoModal("Task Completed", `"${task.text}" has been marked as done.`);
+          } else {
+            showInfoModal("Task Unchecked", `"${task.text}" has been marked as not completed.`);
+          }
           return;
         }
 
@@ -499,7 +611,6 @@
 
       function startInlineEdit(tr, task) {
         if (activeEditor) return;
-        
         const cell = tr.querySelector(".task-text");
         if (!cell) return;
 
@@ -550,6 +661,7 @@
             task.text = newText;
             undoStack.push({ type: 'edit', task: previousState });
             saveState();
+            showInfoModal("Task Updated", `Task changed to "${task.text}".`);
           } else {
             cell.innerHTML = originalContent;
           }
@@ -571,7 +683,7 @@
 
         const outsideClickListener = (ev) => {
           if (!cell.contains(ev.target)) {
-            saveEdit(); 
+            saveEdit();
           }
         };
 
@@ -619,15 +731,19 @@
       };
 
       const clearAll = () => {
-        if (confirm("Are you sure you want to delete all tasks?")) {
+        showModal("Clear All Tasks", "Are you sure you want to delete all tasks?", () => {
           undoStack.push({ type: 'clearAll', tasks: JSON.parse(JSON.stringify(tasks)) });
           tasks = [];
           saveState();
-        }
+          showInfoModal("All Cleared", "All tasks have been successfully deleted.");
+        });
       };
 
       const exportTasks = () => {
-        if (tasks.length === 0) { alert("No tasks to export."); return; }
+        if (tasks.length === 0) {
+          showModal("Export Tasks", "No tasks to export.", null, false);
+          return;
+        }
         const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -635,6 +751,7 @@
         a.download = "tasks.json";
         a.click();
         URL.revokeObjectURL(url);
+        showInfoModal("Exported", "Your tasks have been exported successfully!");
       };
 
       const importTasks = () => {
@@ -653,8 +770,9 @@
                 const clean = importedTasks.filter(t => t && t.text);
                 tasks = clean.map(t => { if (!t.id) t.id = Date.now() + Math.floor(Math.random() * 1000); return t; });
                 saveState();
-              } else alert("Invalid file format");
-            } catch { alert("Error parsing file"); }
+                showInfoModal("Import Successful", "Tasks have been imported successfully!");
+              } else showModal("Import Error", "Invalid file format.", null, false);
+            } catch { showModal("Import Error", "Error parsing file.", null, false); }
           };
           reader.readAsText(file);
         };
@@ -681,19 +799,18 @@
       importBtn.addEventListener("click", (e) => { e.preventDefault(); importTasks(); });
       document.querySelectorAll("#taskTable th[data-sort]").forEach(th => th.addEventListener("click", handleSort));
 
-      setInterval(() => { if (!activeEditor) updateCountdown(); }, 1000);
-
-      const updateCountdown = () => {
-        const now = new Date();
-        tasks.forEach(task => {
-          if (!task.due || task.completed) return;
-          task.remaining = new Date(task.due) - now;
-        });
-        renderTasks();
-      };
-
+      setInterval(renderTasks, 1000);
       renderTasks();
     });
-    </script>
+  </script>
+  <div id="infoModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header" id="infoModalTitle">Info</div>
+    <div class="modal-body" id="infoModalMessage">Success!</div>
+    <div class="modal-footer">
+      <button class="modal-btn confirm" id="infoModalOkBtn">OK</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
