@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>To-Do List</title>
   <style>
+    /* Remove if the scrollbars are needed */
+    html, body {
+      overflow: hidden;
+      height: 100%; 
+    }
+
     :root {
       --font-family: "Segoe UI", Tahoma, sans-serif;
       --primary-bg: linear-gradient(135deg, #001f3f 0%, #c0c0c0 100%);
@@ -34,10 +40,32 @@
     .todo-container {
       background: var(--container-bg);
       width: 100%;
-      max-width: 1100px;
+      max-width: 1000px;
+      height: 89vh;
       padding: 25px;
       border-radius: 16px;
       box-shadow: 0 6px 20px var(--shadow-color);
+      transition: transform 0.4s ease-in-out; 
+      display: flex;
+      flex-direction: column;
+    }
+
+    .todo-container.shrink {
+      transform: translateX(-20%);
+    }
+
+    .todo-content {
+      flex: 1;         
+      display: flex;
+      flex-direction: column;
+    }
+
+    .todo-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 15px;
+      margin-top: auto;   
     }
 
     h2 { margin: 0 0 20px; text-align: center; color: var(--text-color); }
@@ -181,7 +209,6 @@
       color: var(--text-color);
     }
 
-    /* Completed styles */
     .completed { text-decoration: line-through; color: gray !important; }
     .completed-row { color: gray !important; }
     
@@ -277,6 +304,62 @@
     }
     .modal-btn.confirm { background: var(--navy); color: white; }
     .modal-btn.cancel { background: var(--silver); color: var(--navy); }
+
+    .notes-panel {
+      position: fixed;
+      top: 20px;
+      right: -50%;
+      width: 25%;
+      height: 90vh;
+      background: var(--container-bg);
+      box-shadow: -4px 0 20px var(--shadow-color);
+      transition: right 0.4s ease-in-out;
+      z-index: 1000;
+      padding: 20px;
+      border-radius: 16px 0 0 16px; 
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notes-panel.active {
+      right: 0; 
+    }
+
+    .notes-panel h3 {
+      margin: 0 0 5px;
+      color: var(--navy);
+    }
+
+    #notesContent {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      font-size: 14px;
+      background: var(--task-bg);
+      color: var(--text-color);
+      box-sizing: border-box;
+      overflow-y: auto;
+      max-height: 100%; 
+    }
+
+    .notes-btn {
+      position: fixed;
+      top: 20px;
+      right: 0;
+      background: var(--navy);
+      color: white;
+      border: none;
+      border-radius: 8px 0 0 8px;
+      padding: 12px 8px;
+      cursor: pointer;
+      z-index: 1100;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -285,49 +368,53 @@
 
     <div id="notification"></div>
 
-    <form id="taskForm" class="input-row">
-      <div class="form-group">
-        <label for="taskInput">Task Name</label>
-        <input type="text" id="taskInput" placeholder="Enter task..." required>
-      </div>
-      <div class="form-group">
-        <label for="prioritySelect">Priority</label>
-        <select id="prioritySelect">
-          <option value="easy">Easy</option>
-          <option value="medium" selected>Medium</option>
-          <option value="hard">Hard</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="dueDate">Deadline (Date)</label>
-        <input type="date" id="dueDate">
-      </div>
-      <div class="form-group">
-        <label for="dueTime">Deadline (Time)</label>
-        <input type="time" id="dueTime">
-      </div>
-      <button type="submit" class="add-btn">Add</button>
-    </form>
+    <div class="todo-content">
 
-    <div class="search-bar">
-      <label for="searchInput">Search</label>
-      <input type="text" id="searchInput" placeholder="Search tasks...">
-    </div>
+      <form id="taskForm" class="input-row">
+        <div class="form-group">
+          <label for="taskInput">Task Name</label>
+          <input type="text" id="taskInput" placeholder="Enter task..." required>
+        </div>
+        <div class="form-group">
+          <label for="prioritySelect">Priority</label>
+          <select id="prioritySelect">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="dueDate">Deadline (Date)</label>
+          <input type="date" id="dueDate">
+        </div>
+        <div class="form-group">
+          <label for="dueTime">Deadline (Time)</label>
+          <input type="time" id="dueTime">
+        </div>
+        <button type="submit" class="add-btn">Add</button>
+      </form>
 
-    <div class="task-table-container">
-      <table id="taskTable">
-        <thead>
-          <tr>
-            <th>Done</th>
-            <th data-sort="task">Task <span class="indicator">⇅</span></th>
-            <th data-sort="priority">Priority <span class="indicator">⇅</span></th>
-            <th data-sort="deadline">Deadline <span class="indicator">⇅</span></th>
-            <th data-sort="timeLeft">Time Left <span class="indicator">⇅</span></th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody id="taskList"></tbody>
-      </table>
+      <div class="search-bar">
+        <label for="searchInput">Search</label>
+        <input type="text" id="searchInput" placeholder="Search tasks...">
+      </div>
+
+      <div class="task-table-container">
+        <table id="taskTable">
+          <thead>
+            <tr>
+              <th>Done</th>
+              <th data-sort="task">Task <span class="indicator">⇅</span></th>
+              <th data-sort="priority">Priority <span class="indicator">⇅</span></th>
+              <th data-sort="deadline">Deadline <span class="indicator">⇅</span></th>
+              <th data-sort="timeLeft">Time Left <span class="indicator">⇅</span></th>
+              <th>Delete</th>
+            </tr>
+          </thead>
+          <tbody id="taskList"></tbody>
+        </table>
+      </div>
+
     </div>
 
     <div class="footer">
@@ -342,6 +429,7 @@
 
     <div class="stats" id="statsPanel"></div>
   </div>
+
   <div id="appModal" class="modal">
     <div class="modal-content">
       <div class="modal-header" id="modalTitle">Confirm</div>
@@ -368,6 +456,10 @@
       const importBtn = document.getElementById("importBtn");
       const clearAllBtn = document.getElementById("clearAllBtn");
       const notification = document.getElementById("notification");
+      const notesBtn = document.getElementById("notesBtn");
+      const notesPanel = document.getElementById("notesPanel");
+      const notesContent = document.getElementById("notesContent");
+      const todoContainer = document.querySelector(".todo-container");
 
       let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
       let undoStack = [];
@@ -789,6 +881,17 @@
         renderTasks();
       };
 
+      notesContent.value = localStorage.getItem("notes") || "";
+
+      notesContent.addEventListener("input", () => {
+        localStorage.setItem("notes", notesContent.value);
+      });
+
+      notesBtn.addEventListener("click", () => {
+        const isActive = notesPanel.classList.toggle("active");
+        todoContainer.classList.toggle("shrink", isActive);
+      });
+
       taskForm.addEventListener("submit", addTask);
       taskForm.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); taskForm.requestSubmit(); } });
       taskList.addEventListener("click", handleTaskListClick);
@@ -811,6 +914,11 @@
       <button class="modal-btn confirm" id="infoModalOkBtn">OK</button>
     </div>
   </div>
-</div>
+  </div>
+  <button id="notesBtn" class="notes-btn">Notes</button>
+  <div id="notesPanel" class="notes-panel">
+    <h3>📝 Notes</h3>
+    <textarea id="notesContent" placeholder="Write your notes here..."></textarea>
+  </div>
 </body>
 </html>
