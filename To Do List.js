@@ -315,12 +315,14 @@ document.addEventListener("DOMContentLoaded", () => {
         cell.innerHTML = originalContent;
         }
         cleanup();
+        renderTasks();
     };
 
     const cancelEdit = () => {
         if (finished) return;
         cell.innerHTML = originalContent;
         cleanup();
+        renderTasks();
     };
 
     const escapeHandler = (ev) => {
@@ -465,6 +467,10 @@ document.addEventListener("DOMContentLoaded", () => {
     importBtn.addEventListener("click", (e) => { e.preventDefault(); importTasks(); });
     document.querySelectorAll("#taskTable th[data-sort]").forEach(th => th.addEventListener("click", handleSort));
 
-    setInterval(renderTasks, 1000);
+    setInterval(() => {
+        if (!activeEditor) {
+            renderTasks();
+        }
+    }, 1000);
     renderTasks();
 });
