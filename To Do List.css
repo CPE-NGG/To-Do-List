@@ -168,27 +168,57 @@ textarea::placeholder {
 
 .priority-cell {
     position: relative;
-    text-align: center;      
-    vertical-align: middle;  
+    text-align: center;
+    vertical-align: middle;
+    overflow: visible !important; 
 }
 
 .priority-cell .priority-stripe {
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    left: 4px;               
+    top: 6px;
+    bottom: 6px;
     width: 6px;
+    border-radius: 2px;
+    z-index: 5;
+    box-sizing: border-box;
 }
 
-.priority-cell span {
-    display: inline-block;
+.priority-cell .priority-text {
+    display: block;
     width: 100%;
-    text-align: center;     
+    padding: 8px 10px 8px 18px; 
+    box-sizing: border-box;
+    text-align: center;
+    cursor: text;
+    position: relative;
+    z-index: 1;
 }
-.priority-hard { background-color: #d9534f; }   /* red */
-.priority-medium { background-color: #f0ad4e; } /* amber */
-.priority-easy { background-color: #5cb85c; }   /* green */
-.priority-gray { background-color: var(--completed-gray); } 
+
+.priority-cell select {
+    display: inline-block;
+    position: absolute;
+    top: 50%;
+    left: 43%;
+    transform: translate(-50%, -50%);
+    min-width: unset !important;
+    width: auto !important;     
+    max-width: 100px;       
+    padding: 2px 8px;
+    border: 2px solid #007bff;
+    border-radius: 6px;
+    background: white;
+    z-index: 50;
+    cursor: pointer;
+    height: 26px;
+    box-sizing: border-box;
+}
+
+.priority-hard  { background-color: #d9534f; }   /* red */
+.priority-medium{ background-color: #f0ad4e; }   /* amber */
+.priority-easy  { background-color: #5cb85c; }   /* green */
+.priority-gray  { background-color: var(--completed-gray); }
+
 
 .due-date.overdue { color: #dc3545; }
 

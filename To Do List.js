@@ -32,15 +32,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const modalMessage = document.getElementById("modalMessage");
         const confirmBtn = document.getElementById("modalConfirmBtn");
         const cancelBtn = document.getElementById("modalCancelBtn");
-
         if (!modal) return;
         modalTitle.textContent = title;
         modalMessage.textContent = message;
         modal.classList.add("active");
         cancelBtn.style.display = showCancel ? "inline-block" : "none";
-
         const closeModal = () => modal.classList.remove("active");
-
         confirmBtn.onclick = () => { closeModal(); if (onConfirm) onConfirm(); };
         cancelBtn.onclick = closeModal;
         modal.onclick = (e) => { if (e.target === modal) closeModal(); };
@@ -55,18 +52,27 @@ document.addEventListener("DOMContentLoaded", () => {
         modalTitle.textContent = title;
         modalMessage.textContent = message;
         modal.classList.add("active");
-
         const closeModal = () => modal.classList.remove("active");
         okBtn.onclick = () => { closeModal(); if (onOk) onOk(); };
         modal.onclick = (e) => { if (e.target === modal) closeModal(); };
     }
 
-    const saveState = () => {
+    function showNotification(msg, timeout = 1800) {
+        if (!notification) return;
+        notification.textContent = msg;
+        notification.style.display = "block";
+        clearTimeout(showNotification._t);
+        showNotification._t = setTimeout(() => {
+            notification.style.display = "none";
+        }, timeout);
+    }
+
+    function saveState() {
         localStorage.setItem("tasks", JSON.stringify(tasks));
         renderTasks();
-    };
+    }
 
-    const formatTimeLeft = (ms) => {
+    function formatTimeLeft(ms) {
         if (ms == null) return "-";
         const totalSeconds = Math.floor(ms / 1000);
         const absSeconds = Math.abs(totalSeconds);
@@ -80,9 +86,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes}m`);
         parts.push(`${seconds}s`);
         return parts.join(" ");
-    };
+    }
 
-    const formatShortDateTime = (date) => {
+    function formatShortDateTime(date) {
         if (!date) return "-";
         const d = new Date(date);
         if (isNaN(d)) return "-";
@@ -95,12 +101,25 @@ document.addEventListener("DOMContentLoaded", () => {
         hh = hh % 12; if (hh === 0) hh = 12;
         const minutes = pad(d.getMinutes());
         return `${mm}/${dd}/${yy} ${hh}:${minutes} ${ampm}`;
-    };
+    }
 
-    const renderTasks = () => {
+    function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function updateStats() {
+        const total = tasks.length;
+        const completed = tasks.filter(t => t.completed).length;
+        const upcoming = tasks.filter(t => t.due && new Date(t.due) >= new Date()).length;
+        if (taskCounter) taskCounter.textContent = `${completed}/${total} completed`;
+        if (statsPanel) statsPanel.textContent = `📊 Total: ${total} | ✅ Completed: ${completed} | 📅 Upcoming: ${upcoming}`;
+    }
+
+    function renderTasks() {
         const searchTerm = (searchInput && searchInput.value) ? searchInput.value.toLowerCase() : "";
         let filteredTasks = tasks.filter(task => task.text.toLowerCase().includes(searchTerm));
-
         if (currentSort.key) {
             if (currentSort.key === "priority") {
                 const order = { hard: 1, medium: 2, easy: 3 };
@@ -164,8 +183,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><input type="checkbox" class="task-checkbox" ${task.completed ? "checked" : ""}></td>
                 <td class="task-text ${task.completed ? "completed" : ""}">${escapeHtml(task.text)}</td>
                 <td class="priority-cell ${task.completed ? "completed" : ""}">
-                    <div class="priority-stripe ${task.completed ? "priority-gray" : `priority-${task.priority}`}"></div>
-                    <span>${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}</span>
+                    <div class="priority-stripe ${task.completed ? "priority-gray" : `priority-${task.priority}`}" aria-hidden="true"></div>
+                    <span class="priority-text" style="cursor:text; display:inline-block; width:100%; text-align:center;">${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}</span>
                 </td>
                 <td class="due-cell ${task.completed ? "completed" : (dueDate && dueDate < now ? "overdue" : "")}">
                     ${task.due ? formatShortDateTime(task.due) : "-"}
@@ -177,44 +196,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         updateStats();
-    };
-
-    function escapeHtml(text) {
-        const div = document.createElement("div");
-        div.textContent = text;
-        return div.innerHTML;
     }
-
-    const updateStats = () => {
-        const total = tasks.length;
-        const completed = tasks.filter(t => t.completed).length;
-        const upcoming = tasks.filter(t => t.due && new Date(t.due) >= new Date()).length;
-        if (taskCounter) taskCounter.textContent = `${completed}/${total} completed`;
-        if (statsPanel) statsPanel.textContent = `📊 Total: ${total} | ✅ Completed: ${completed} | 📅 Upcoming: ${upcoming}`;
-    };
-
-    const addTask = (e) => {
-        e.preventDefault();
-        const text = taskInput.value.trim();
-        if (!text) return;
-
-        let due = null;
-        if (dueDateInput && dueDateInput.value) {
-            due = dueDateInput.value;
-            if (dueTimeInput && dueTimeInput.value) due += "T" + dueTimeInput.value;
-            else due += "T00:00";
-        }
-
-        if (!due) {
-            showModal("No Deadline", "No deadline set. Do you want to add this task without a deadline?", () => {
-                proceedAddTask(text, due);
-                showInfoModal("Task Added", "Your task has been added successfully!");
-            });
-            return;
-        }
-        proceedAddTask(text, due);
-        showInfoModal("Task Added", "Your task has been added successfully!");
-    };
 
     function proceedAddTask(text, due) {
         const newTask = {
@@ -232,7 +214,28 @@ document.addEventListener("DOMContentLoaded", () => {
         saveState();
     }
 
-    const handleTaskListClick = (e) => {
+    function addTask(e) {
+        e.preventDefault();
+        const text = taskInput.value.trim();
+        if (!text) return;
+        let due = null;
+        if (dueDateInput && dueDateInput.value) {
+            due = dueDateInput.value;
+            if (dueTimeInput && dueTimeInput.value) due += "T" + dueTimeInput.value;
+            else due += "T00:00";
+        }
+        if (!due) {
+            showModal("No Deadline", "No deadline set. Do you want to add this task without a deadline?", () => {
+                proceedAddTask(text, due);
+                showInfoModal("Task Added", "Your task has been added successfully!");
+            });
+            return;
+        }
+        proceedAddTask(text, due);
+        showInfoModal("Task Added", "Your task has been added successfully!");
+    }
+
+    function handleTaskListClick(e) {
         const target = e.target;
         const tr = target.closest("tr");
         if (!tr) return;
@@ -257,11 +260,8 @@ document.addEventListener("DOMContentLoaded", () => {
             else task.frozenTime = null;
             undoStack.push({ type: 'toggle', task: previousState });
             saveState();
-            if (task.completed) {
-                showInfoModal("Task Completed", `"${task.text}" has been marked as done.`);
-            } else {
-                showInfoModal("Task Unchecked", `"${task.text}" has been marked as not completed.`);
-            }
+            if (task.completed) showInfoModal("Task Completed", `"${task.text}" has been marked as done.`);
+            else showInfoModal("Task Unchecked", `"${task.text}" has been marked as not completed.`);
             return;
         }
 
@@ -270,7 +270,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (target.closest(".priority-cell")) {
+        if (target.classList.contains("priority-text")) {
             startInlineEditPriority(tr, task);
             return;
         }
@@ -279,53 +279,50 @@ document.addEventListener("DOMContentLoaded", () => {
             startInlineEditDue(tr, task);
             return;
         }
-    };
+    }
 
     function startInlineEdit(tr, task) {
         if (activeEditor) return;
         const cell = tr.querySelector(".task-text");
         if (!cell) return;
-
         const originalText = task.text;
         const input = document.createElement("input");
         input.type = "text";
         input.value = originalText;
-
         Object.assign(input.style, {
             background: "white",
             border: "2px solid #007bff",
             width: "100%",
             font: "inherit",
             textAlign: "inherit",
-            padding: "4px 8px",
+            padding: "6px 8px",
             margin: "0",
             outline: "none",
             boxSizing: "border-box",
-            borderRadius: "4px"
+            borderRadius: "6px"
         });
-
         const originalContent = cell.innerHTML;
         cell.innerHTML = "";
         cell.appendChild(input);
         input.focus();
         input.select();
-        activeEditor = { input, cell, originalContent, task, originalText };
+        activeEditor = { type: "text", node: cell, originalContent, task };
 
         notification.textContent = "Editing: Press Enter to save or Esc to cancel";
         notification.style.display = "block";
 
         let finished = false;
 
-        const cleanup = () => {
+        function cleanup() {
             if (finished) return;
             finished = true;
             activeEditor = null;
             notification.style.display = "none";
-            document.removeEventListener("click", outsideClickListener);
-            document.removeEventListener("keydown", escapeHandler);
-        };
+            document.removeEventListener("mousedown", outsideClickListener);
+            document.removeEventListener("keydown", keyHandler);
+        }
 
-        const saveEdit = () => {
+        function saveEdit() {
             if (finished) return;
             const newText = input.value.trim();
             if (newText && newText !== originalText) {
@@ -339,16 +336,16 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             cleanup();
             renderTasks();
-        };
+        }
 
-        const cancelEdit = () => {
+        function cancelEdit() {
             if (finished) return;
             cell.innerHTML = originalContent;
             cleanup();
             renderTasks();
-        };
+        }
 
-        const escapeHandler = (ev) => {
+        function keyHandler(ev) {
             if (ev.key === "Escape") {
                 ev.preventDefault();
                 cancelEdit();
@@ -356,13 +353,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 ev.preventDefault();
                 saveEdit();
             }
-        };
+        }
 
-        const outsideClickListener = (ev) => {
+        function outsideClickListener(ev) {
             if (!cell.contains(ev.target)) {
-                saveEdit();
+                ev.preventDefault();
+                cancelEdit();
             }
-        };
+        }
 
         input.addEventListener("keydown", (ev) => {
             if (ev.key === "Enter") {
@@ -371,15 +369,18 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        document.addEventListener("click", outsideClickListener);
-        document.addEventListener("keydown", escapeHandler);
+        document.addEventListener("mousedown", outsideClickListener);
+        document.addEventListener("keydown", keyHandler);
     }
 
     function startInlineEditPriority(tr, task) {
         if (activeEditor) return;
         const cell = tr.querySelector(".priority-cell");
         if (!cell) return;
-
+        const originalContent = cell.innerHTML;
+        const stripe = document.createElement("div");
+        stripe.className = `priority-stripe ${task.completed ? "priority-gray" : `priority-${task.priority}`}`;
+        stripe.setAttribute("aria-hidden", "true");
         const select = document.createElement("select");
         ["hard", "medium", "easy"].forEach(p => {
             const opt = document.createElement("option");
@@ -388,29 +389,39 @@ document.addEventListener("DOMContentLoaded", () => {
             if (task.priority === p) opt.selected = true;
             select.appendChild(opt);
         });
-
         Object.assign(select.style, {
             width: "100%",
+            padding: "6px 10px",
             font: "inherit",
-            padding: "6px 8px",
             border: "2px solid #007bff",
             borderRadius: "6px",
-            background: "white",
-            boxSizing: "border-box"
+            boxSizing: "border-box",
+            height: "36px",
+            cursor: "pointer",
+            marginLeft: "12px"
         });
-
-        const originalContent = cell.innerHTML;
         cell.innerHTML = "";
+        cell.appendChild(stripe);
         cell.appendChild(select);
         select.focus();
-
-        activeEditor = { input: select, cell, originalContent, task };
+        activeEditor = { type: "priority", node: cell, originalContent, task, stripe, select };
 
         notification.textContent = "Editing: Press Enter to save or Esc to cancel";
         notification.style.display = "block";
 
-        const saveEdit = () => {
-            if (!activeEditor) return;
+        let finished = false;
+
+        function cleanup() {
+            if (finished) return;
+            finished = true;
+            activeEditor = null;
+            notification.style.display = "none";
+            document.removeEventListener("mousedown", outsideClickListener);
+            document.removeEventListener("keydown", keyHandler);
+        }
+
+        function saveEdit() {
+            if (finished) return;
             const prev = JSON.parse(JSON.stringify(task));
             const newVal = select.value;
             if (newVal && newVal !== task.priority) {
@@ -421,23 +432,39 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 cell.innerHTML = originalContent;
             }
-            activeEditor = null;
-            notification.style.display = "none";
+            cleanup();
             renderTasks();
-        };
+        }
 
-        const cancelEdit = () => {
-            if (!activeEditor) return;
+        function cancelEdit() {
+            if (finished) return;
             cell.innerHTML = originalContent;
-            activeEditor = null;
-            notification.style.display = "none";
+            cleanup();
             renderTasks();
-        };
+        }
 
-        select.addEventListener("change", saveEdit);
-        select.addEventListener("blur", () => {
-            setTimeout(saveEdit, 100);
+        function keyHandler(ev) {
+            if (ev.key === "Escape") {
+                ev.preventDefault();
+                cancelEdit();
+            } else if (ev.key === "Enter") {
+                ev.preventDefault();
+                saveEdit();
+            }
+        }
+
+        function outsideClickListener(ev) {
+            if (!cell.contains(ev.target)) {
+                ev.preventDefault();
+                cancelEdit();
+            }
+        }
+
+        select.addEventListener("change", () => {
+            const v = select.value;
+            stripe.className = `priority-stripe priority-${v}`;
         });
+
         select.addEventListener("keydown", (ev) => {
             if (ev.key === "Escape") {
                 ev.preventDefault();
@@ -447,13 +474,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveEdit();
             }
         });
+
+        document.addEventListener("mousedown", outsideClickListener);
+        document.addEventListener("keydown", keyHandler);
     }
 
     function startInlineEditDue(tr, task) {
         if (activeEditor) return;
         const cell = tr.querySelector(".due-cell");
         if (!cell) return;
-
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
         wrapper.style.flexDirection = "column";
@@ -462,7 +491,6 @@ document.addEventListener("DOMContentLoaded", () => {
         wrapper.style.width = "100%";
         wrapper.style.boxSizing = "border-box";
         wrapper.style.padding = "4px 0";
-
         const dateInput = document.createElement("input");
         dateInput.type = "date";
         Object.assign(dateInput.style, {
@@ -474,7 +502,6 @@ document.addEventListener("DOMContentLoaded", () => {
             font: "inherit",
             background: "white"
         });
-
         const timeInput = document.createElement("input");
         timeInput.type = "time";
         Object.assign(timeInput.style, {
@@ -486,7 +513,6 @@ document.addEventListener("DOMContentLoaded", () => {
             font: "inherit",
             background: "white"
         });
-
         if (task.due) {
             const d = new Date(task.due);
             if (!isNaN(d)) {
@@ -498,31 +524,29 @@ document.addEventListener("DOMContentLoaded", () => {
             dateInput.value = todayISO;
             timeInput.value = "08:00";
         }
-
         const originalContent = cell.innerHTML;
         cell.innerHTML = "";
         wrapper.appendChild(dateInput);
         wrapper.appendChild(timeInput);
         cell.appendChild(wrapper);
         dateInput.focus();
-
-        activeEditor = { wrapper, dateInput, timeInput, cell, task, originalContent };
+        activeEditor = { type: "due", node: cell, originalContent, dateInput, timeInput, task };
 
         notification.textContent = "Editing: Press Enter to save or Esc to cancel";
         notification.style.display = "block";
 
         let finished = false;
 
-        const cleanup = () => {
+        function cleanup() {
             if (finished) return;
             finished = true;
             activeEditor = null;
             notification.style.display = "none";
-            document.removeEventListener("click", outsideClickListener);
-            document.removeEventListener("keydown", escapeHandler);
-        };
+            document.removeEventListener("mousedown", outsideClickListener);
+            document.removeEventListener("keydown", keyHandler);
+        }
 
-        const saveEdit = () => {
+        function saveEdit() {
             if (finished) return;
             const dVal = dateInput.value;
             const tVal = timeInput.value || "00:00";
@@ -541,19 +565,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveState();
                 showInfoModal("Deadline Updated", `Deadline changed to "${formatShortDateTime(task.due)}".`);
             } else {
+                cell.innerHTML = originalContent;
             }
             cleanup();
             renderTasks();
-        };
+        }
 
-        const cancelEdit = () => {
+        function cancelEdit() {
             if (finished) return;
             cell.innerHTML = originalContent;
             cleanup();
             renderTasks();
-        };
+        }
 
-        const escapeHandler = (ev) => {
+        function keyHandler(ev) {
             if (ev.key === "Escape") {
                 ev.preventDefault();
                 cancelEdit();
@@ -561,21 +586,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 ev.preventDefault();
                 saveEdit();
             }
-        };
+        }
 
-        const outsideClickListener = (ev) => {
+        function outsideClickListener(ev) {
             if (!cell.contains(ev.target)) {
-                saveEdit();
+                ev.preventDefault();
+                cancelEdit();
             }
-        };
+        }
 
-        dateInput.addEventListener("keydown", escapeHandler);
-        timeInput.addEventListener("keydown", escapeHandler);
-        document.addEventListener("click", outsideClickListener);
-        document.addEventListener("keydown", escapeHandler);
+        dateInput.addEventListener("keydown", keyHandler);
+        timeInput.addEventListener("keydown", keyHandler);
+        document.addEventListener("mousedown", outsideClickListener);
+        document.addEventListener("keydown", keyHandler);
     }
 
-    const undoLastAction = () => {
+    function undoLastAction() {
         if (undoStack.length > 0) {
             const lastAction = undoStack.pop();
             if (lastAction.type === 'clearAll') {
@@ -610,27 +636,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             saveState();
         } else {
-            notification.textContent = "Nothing to undo.";
-            notification.style.display = "block";
-            setTimeout(() => { notification.style.display = "none"; }, 1800);
+            showNotification("Nothing to undo.");
         }
-    };
+    }
 
-    const clearAll = () => {
+    function clearAll() {
         if (tasks.length === 0) {
             showInfoModal("Nothing to Clear", "There are no tasks to clear.");
             return;
         }
-
         showModal("Clear All Tasks", "Are you sure you want to delete all tasks?", () => {
             undoStack.push({ type: 'clearAll', tasks: JSON.parse(JSON.stringify(tasks)) });
             tasks = [];
             saveState();
             showInfoModal("All Cleared", "All tasks have been successfully deleted.");
         });
-    };
+    }
 
-    const exportTasks = () => {
+    function exportTasks() {
         if (tasks.length === 0) {
             showModal("Export Tasks", "No tasks to export.", null, false);
             return;
@@ -643,9 +666,9 @@ document.addEventListener("DOMContentLoaded", () => {
         a.click();
         URL.revokeObjectURL(url);
         showInfoModal("Exported", "Your tasks have been exported successfully!");
-    };
+    }
 
-    const importTasks = () => {
+    function importTasks() {
         const input = document.createElement("input");
         input.type = "file";
         input.accept = "application/json";
@@ -670,9 +693,9 @@ document.addEventListener("DOMContentLoaded", () => {
             reader.readAsText(file);
         };
         input.click();
-    };
+    }
 
-    const handleSort = (e) => {
+    function handleSort(e) {
         const th = e.target.closest("th");
         if (!th) return;
         const key = th.dataset.sort;
@@ -680,9 +703,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentSort.key === key) currentSort.asc = !currentSort.asc;
         else currentSort = { key, asc: true };
         renderTasks();
-    };
+    }
 
-    // restore notes
     if (notesContent) notesContent.value = localStorage.getItem("notes") || "";
     if (notesContent) notesContent.addEventListener("input", () => { localStorage.setItem("notes", notesContent.value); });
     if (notesBtn) notesBtn.addEventListener("click", () => {
@@ -690,7 +712,6 @@ document.addEventListener("DOMContentLoaded", () => {
         todoContainer.classList.toggle("shrink", isActive);
     });
 
-    // attach listeners (keeps your original naming)
     if (taskForm) {
         taskForm.addEventListener("submit", addTask);
         taskForm.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); taskForm.requestSubmit(); } });
