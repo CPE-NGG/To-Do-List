@@ -4,8 +4,8 @@ Features
   User-friendly interface for managing to-do records
   Add, edit, and delete task entries
   View an organized list of tasks
-  Responsive design with a header logo
-  Built with HTML, CSS, and JavaScript (customize as needed)
+  Responsive design with lots of features
+  Built with HTML, CSS, and JavaScript
   Easy to set up and run locally
 
 Technology Stack
