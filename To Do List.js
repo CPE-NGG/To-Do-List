@@ -283,24 +283,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function startInlineEdit(tr, task) {
         if (activeEditor) return;
+
+        if (task.completed) {
+            showInfoModal("Edit Disabled", "You cannot edit a completed task.");
+            return;
+        }
+
         const cell = tr.querySelector(".task-text");
         if (!cell) return;
         const originalText = task.text;
         const input = document.createElement("input");
         input.type = "text";
         input.value = originalText;
-        Object.assign(input.style, {
-            background: "white",
-            border: "2px solid #007bff",
-            width: "100%",
-            font: "inherit",
-            textAlign: "inherit",
-            padding: "6px 8px",
-            margin: "0",
-            outline: "none",
-            boxSizing: "border-box",
-            borderRadius: "6px"
-        });
         const originalContent = cell.innerHTML;
         cell.innerHTML = "";
         cell.appendChild(input);
@@ -375,6 +369,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function startInlineEditPriority(tr, task) {
         if (activeEditor) return;
+
+        if (task.completed) {
+            showInfoModal("Edit Disabled", "You cannot change the priority of a completed task.");
+            return;
+        }
+
         const cell = tr.querySelector(".priority-cell");
         if (!cell) return;
         const originalContent = cell.innerHTML;
@@ -388,17 +388,6 @@ document.addEventListener("DOMContentLoaded", () => {
             opt.textContent = p.charAt(0).toUpperCase() + p.slice(1);
             if (task.priority === p) opt.selected = true;
             select.appendChild(opt);
-        });
-        Object.assign(select.style, {
-            width: "100%",
-            padding: "6px 10px",
-            font: "inherit",
-            border: "2px solid #007bff",
-            borderRadius: "6px",
-            boxSizing: "border-box",
-            height: "36px",
-            cursor: "pointer",
-            marginLeft: "12px"
         });
         cell.innerHTML = "";
         cell.appendChild(stripe);
@@ -481,6 +470,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function startInlineEditDue(tr, task) {
         if (activeEditor) return;
+
+        if (task.completed) {
+            showInfoModal("Edit Disabled", "You cannot modify the due date of a completed task.");
+            return;
+        }
+
         const cell = tr.querySelector(".due-cell");
         if (!cell) return;
         const wrapper = document.createElement("div");
