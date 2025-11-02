@@ -705,6 +705,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (notesBtn) notesBtn.addEventListener("click", () => {
         const isActive = notesPanel.classList.toggle("active");
         todoContainer.classList.toggle("shrink", isActive);
+
+        notesBtn.classList.toggle("active", isActive);
     });
 
     if (taskForm) {

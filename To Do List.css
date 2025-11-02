@@ -146,7 +146,7 @@ textarea::placeholder {
     font-weight: bold;
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 100;
     cursor: pointer;
     color: var(--navy);
 }
@@ -209,10 +209,6 @@ textarea::placeholder {
 }
 
 .priority-cell select {
-    position: absolute;
-    top: 50%;
-    left: 55%;
-    transform: translate(-50%, -50%);
     width: auto;
     min-width: 80px;
     max-width: 95px;
@@ -224,7 +220,7 @@ textarea::placeholder {
     height: 30px;
     cursor: pointer;
     box-sizing: border-box;
-    z-index: 50;
+    margin-left: 7px;
 }
 
 .priority-hard  { background-color: #d9534f; }   /* red */
@@ -345,7 +341,7 @@ tr.overdue-row { background-color: rgba(220, 53, 69, 0.1); }
 .notes-panel {
     position: fixed;
     top: 20px;
-    right: -50%;
+    right: -27.5%;
     width: 25%;
     height: 90vh;
     background: var(--container-bg);
@@ -384,7 +380,7 @@ tr.overdue-row { background-color: rgba(220, 53, 69, 0.1); }
 
 .notes-btn {
     position: fixed;
-    top: 20px;
+    top: 40px; 
     right: 0;
     background: var(--navy);
     color: white;
@@ -396,4 +392,9 @@ tr.overdue-row { background-color: rgba(220, 53, 69, 0.1); }
     writing-mode: vertical-rl;
     text-orientation: mixed;
     font-weight: bold;
+    transition: right 0.4s ease-in-out;
+}
+
+.notes-btn.active {
+    right: 27.5%;
 }
